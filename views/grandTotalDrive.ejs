@@ -1,0 +1,230 @@
+<% layout("/layouts/boilerplate") %>
+
+<style>
+    h1 {
+        padding-top: 60px;
+    }
+    #grand-total {
+        width: 60%; /* Adjust the table width */
+        margin: 0 auto; /* Center the table */
+    }
+    table th, table td {
+        vertical-align: middle;
+    }
+    .selected {
+        background-color: #d3f9d8; /* Highlight color when selected */
+        border: 2px solid #28a745; /* Optional border color for selected row */
+    }
+    .group-header {
+        background-color: #f0f8ff;
+        font-weight: bold;
+    }
+    .grouped-row {
+        background-color: #e8f8e8;
+    }
+    #create-group-btn:disabled {
+        background-color: #ccc; /* Make the button appear disabled */
+    }
+</style>
+
+<title>Grand Total</title>
+<h1 class="text-center my-4">Grand Totals of All Clients</h1>
+
+<table id="grand-total" class="table table-bordered table-striped table-hover border-primary">
+    <thead class="table-success">
+        <tr>
+            <th>Name</th>
+            <th>Grand Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% let overallTotal = 0; %>
+        <% let clientGroups = {}; %> <!-- Object to store grouped clients by market name -->
+
+        <% clients.forEach(client => { 
+            if (client.grandTotal > 0) { 
+                let marketName = client.tableName.split(' ')[0]; // Assuming the market name is the first part of the table name
+                if (!clientGroups[marketName]) {
+                    clientGroups[marketName] = []; // Create an empty array for the market group
+                }
+                clientGroups[marketName].push(client); // Add client to the respective market group
+                overallTotal += Number(client.grandTotal); 
+            }
+        }) %>
+
+        <!-- Render groups and rows -->
+        <% for (let marketName in clientGroups) { %>
+            <tr class="group-header">
+                <td colspan="2"><strong><%= marketName %> Group</strong></td>
+            </tr>
+            <% clientGroups[marketName].forEach(client => { %>
+                <tr class="grouped-row" data-client-id="<%= client.tableName %>" data-market-name="<%= marketName %>">
+                    <td><a href="/<%= client.tableName %>"><%= client.tableName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') %></a></td>
+                    <td></td> <!-- No Grand Total shown for individual clients -->
+                </tr>
+            <% }) %>
+        <% } %>
+
+        <!-- Overall Total -->
+        <tr>
+            <td><strong>Total of All Clients</strong></td>
+            <td><strong><%= overallTotal.toFixed(0) %></strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Modal Pop-up for Group Selection -->
+<div id="group-modal" class="modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Create or Select Group</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <h6>Select or Create a Market Group</h6>
+        <select id="group-select">
+            <option value="Malik Market">Malik Market</option>
+            <option value="Khalid Market">Khalid Market</option>
+            <option value="Kaleem Market">Kaleem Market</option>
+            <option value="Imtiyaz Market">Imtiyaz Market</option>
+            <option value="new">Create New Group</option>
+        </select>
+        <div id="new-group-input" style="display:none;">
+            <label for="new-group-name">Enter New Group Name</label>
+            <input type="text" id="new-group-name" placeholder="Group Name" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="add-to-group-btn">Add to Group</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Button to print the table -->
+<button class="btn btn-primary" onclick="printTable()">Print Table</button>
+
+<script>
+  let selectedClient = null; // Store selected client data
+  let selectedGroups = {}; // Store selected groups with client IDs
+
+  const clientRows = document.querySelectorAll('#grand-total tbody tr');
+  const groupModal = document.getElementById('group-modal');
+  const groupSelect = document.getElementById('group-select');
+  const newGroupInput = document.getElementById('new-group-input');
+  const newGroupNameInput = document.getElementById('new-group-name');
+  const addToGroupBtn = document.getElementById('add-to-group-btn');
+
+  // Handle click event on client rows
+  clientRows.forEach(row => {
+    let clickTimer;
+
+    row.addEventListener('click', function (event) {
+      const row = event.currentTarget;
+      const clientId = row.querySelector('td a').innerText;
+      const marketName = row.querySelector('td a').innerText.split(' ')[0]; // Modify as per your naming structure
+
+      // If there is an ongoing click, clear it
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+      }
+
+      clickTimer = setTimeout(() => {
+        // Show the modal for creating or selecting a group
+        selectedClient = { clientId, marketName };
+        groupModal.style.display = 'block'; // Open the modal
+
+        // Set up the modal content based on the market selection
+        groupSelect.value = 'new'; // Default to creating a new group
+        newGroupInput.style.display = 'none';
+        newGroupNameInput.value = ''; // Clear the input field
+      }, 300); // Short click detection (300ms)
+
+      // Handle long click (optional, if needed for special cases)
+      row.addEventListener('mousedown', function() {
+        clickTimer = setTimeout(() => {
+          // Handle long click behavior (if needed)
+        }, 500); // Long press timeout
+      });
+
+      row.addEventListener('mouseup', function() {
+        clearTimeout(clickTimer); // Clear long click timer
+      });
+    });
+  });
+
+  // Handle group selection
+  groupSelect.addEventListener('change', function () {
+    if (groupSelect.value === 'new') {
+      newGroupInput.style.display = 'block';
+    } else {
+      newGroupInput.style.display = 'none';
+    }
+  });
+
+  // Handle adding client to a group
+  addToGroupBtn.addEventListener('click', function () {
+    const selectedGroup = groupSelect.value;
+    const newGroupName = newGroupNameInput.value.trim();
+
+    // If creating a new group, validate the name
+    if (selectedGroup === 'new' && !newGroupName) {
+      alert('Please enter a valid group name.');
+      return;
+    }
+
+    // If selecting an existing group, use the selected group name
+    const groupName = selectedGroup === 'new' ? newGroupName : selectedGroup;
+
+    // Add client to the selected group
+    const groupRows = document.querySelectorAll(`[data-market-name="${groupName}"]`);
+    
+    if (groupRows.length > 0) {
+      // Append new row under the correct group
+      const newRow = document.createElement('tr');
+      newRow.classList.add('grouped-row');
+      newRow.setAttribute('data-client-id', selectedClient.clientId);
+      newRow.setAttribute('data-market-name', groupName);
+      newRow.innerHTML = `
+        <td><a href="/${selectedClient.clientId}">${selectedClient.clientId}</a></td>
+        <td></td> <!-- No Grand Total shown for individual clients -->
+      `;
+      groupRows[groupRows.length - 1].insertAdjacentElement('afterend', newRow);
+    } else {
+      // If the group doesn't exist, create it
+      const newGroupHeader = document.createElement('tr');
+      newGroupHeader.classList.add('group-header');
+      newGroupHeader.innerHTML = `<td colspan="2"><strong>${groupName} Group</strong></td>`;
+      const tbody = document.querySelector('#grand-total tbody');
+      tbody.appendChild(newGroupHeader);
+
+      const newRow = document.createElement('tr');
+      newRow.classList.add('grouped-row');
+      newRow.setAttribute('data-client-id', selectedClient.clientId);
+      newRow.setAttribute('data-market-name', groupName);
+      newRow.innerHTML = `
+        <td><a href="/${selectedClient.clientId}">${selectedClient.clientId}</a></td>
+        <td></td> <!-- No Grand Total shown for individual clients -->
+      `;
+      tbody.appendChild(newRow);
+    }
+
+    // Close the modal
+    groupModal.style.display = 'none';
+    alert(`Client ${selectedClient.clientId} added to group: ${groupName}`);
+    selectedClient = null; // Reset selected client
+  });
+
+  // Print table function
+  function printTable() {
+    const printContents = document.getElementById('grand-total').outerHTML;
+    const originalContents = document.body.innerHTML;
+    document.body.innerHTML = printContents;
+    window.print();
+    document.body.innerHTML = originalContents;
+  }
+</script>
