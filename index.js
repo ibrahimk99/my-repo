@@ -9,12 +9,14 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const port = 3000;
 
+const arr = ["hello", 1, 2, 3]
 // Set up MySQL connection
 const db = mysql.createConnection({
   host: process.env.MYSQL_HOST,
   user: process.env.MYSQL_USER,
   database: process.env.MYSQL_DATABASE,
-  password: process.env.MYSQL_PASSWORD,});
+  password: process.env.MYSQL_PASSWORD,
+});
 
 // Connect to the database
 db.connect((err) => {
@@ -29,18 +31,19 @@ app.use(express.static('public'));
 // Set EJS as the template engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.engine('ejs', ejsMate); 
+app.engine('ejs', ejsMate);
 
 // Fevicon icon
 app.get('/favicon.ico', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'tea.png'))});
+  res.sendFile(path.join(__dirname, 'public', 'tea.png'))
+});
 
 app.post('/backup', (req, res) => {
   const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, '').slice(0, 14);
   // const command = `"C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin\\mysqldump.exe" -h localhost -u root --password="Zoom1234@" shop > backup-${timestamp}.sql`;
   // Construct the backup filename with the timestamp
   const command = `"${process.env.MYSQL_BIN_PATH}" -h ${process.env.MYSQL_HOST} -u ${process.env.MYSQL_USER} --password="${process.env.MYSQL_PASSWORD}" ${process.env.MYSQL_DATABASE} > backup-${timestamp}.sql`;
-  
+
   exec(command, (error, stdout, stderr) => {
     if (error) {
       console.error(`Error during backup: ${error}`);
@@ -70,7 +73,7 @@ app.post('/create', (req, res) => {
 
   // Construct the table name (Sanitized)
   const tableName = `${clientId.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}_shop`;
- 
+
   // SQL query to create a new table for the client
   const createTableQuery = `
     CREATE TABLE IF NOT EXISTS \`${tableName}\` (
@@ -84,7 +87,7 @@ app.post('/create', (req, res) => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );`;
 
-    // SQL query to create a table for deduction ledger
+  // SQL query to create a table for deduction ledger
   const createDeductionLedger = `
   CREATE TABLE IF NOT EXISTS deduction_ledger (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -113,65 +116,65 @@ app.post('/create', (req, res) => {
 // GET /finance with filters
 app.get('/finance', (req, res) => {
   const { start_date, end_date, description } = req.query;
-  const createFinancereports =`CREATE TABLE IF NOT EXISTS finance_reports (
+  const createFinancereports = `CREATE TABLE IF NOT EXISTS finance_reports (
     id INT AUTO_INCREMENT PRIMARY KEY,
     type ENUM('income', 'outcome') NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     date DATE NOT NULL,
     description VARCHAR(255)
 );`
-db.query(createFinancereports, (err) => {
-  if (err) {
-    console.error('Database error:', err);
-    return res.status(500).send('Failed to create Finance Reports table');
-  }
-})
+  db.query(createFinancereports, (err) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).send('Failed to create Finance Reports table');
+    }
+  })
 
   let fetchRecordsQuery = `SELECT * FROM finance_reports WHERE 1=1`;
   const queryParams = [];
 
   // Add date range filter
   if (start_date) {
-      fetchRecordsQuery += ` AND date >= ?`;
-      queryParams.push(start_date);
+    fetchRecordsQuery += ` AND date >= ?`;
+    queryParams.push(start_date);
   }
   if (end_date) {
-      fetchRecordsQuery += ` AND date <= ?`;
-      queryParams.push(end_date);
+    fetchRecordsQuery += ` AND date <= ?`;
+    queryParams.push(end_date);
   }
 
   // Add description filter
   if (description) {
-      fetchRecordsQuery += ` AND description LIKE ?`;
-      queryParams.push(`%${description}%`);
+    fetchRecordsQuery += ` AND description LIKE ?`;
+    queryParams.push(`%${description}%`);
   }
 
   db.query(fetchRecordsQuery, queryParams, (err, records) => {
-      if (err) {
-          return res.status(500).send('Error fetching records');
+    if (err) {
+      return res.status(500).send('Error fetching records');
+    }
+
+    let totalIncome = 0;
+    let totalOutcome = 0;
+
+    const formattedRecords = records.map(record => {
+      record.amount = parseFloat(record.amount) || 0; // Convert amount to number
+      if (record.type === 'income') {
+        totalIncome += record.amount;
+      } else if (record.type === 'outcome') {
+        totalOutcome += record.amount;
       }
+      return record;
+    });
 
-      let totalIncome = 0;
-      let totalOutcome = 0;
+    const remainingBalance = totalIncome - totalOutcome;
 
-      const formattedRecords = records.map(record => {
-          record.amount = parseFloat(record.amount) || 0; // Convert amount to number
-          if (record.type === 'income') {
-              totalIncome += record.amount;
-          } else if (record.type === 'outcome') {
-              totalOutcome += record.amount;
-          }
-          return record;
-      });
-
-      const remainingBalance = totalIncome - totalOutcome;
-
-      res.render('finance', {
-          records: formattedRecords,
-          totalIncome: totalIncome || 0,
-          totalOutcome: totalOutcome || 0,
-          remainingBalance: remainingBalance || 0,
-      });
+    res.render('finance', {
+      records: formattedRecords,
+      totalIncome: totalIncome || 0,
+      totalOutcome: totalOutcome || 0,
+      remainingBalance: remainingBalance || 0,
+    });
   });
 });
 
@@ -186,10 +189,10 @@ app.post('/finance', (req, res) => {
   `;
 
   db.query(addRecordQuery, [type, parseFloat(amount), date, description || null], (err) => {
-      if (err) {
-          return res.status(500).send('Error adding record');
-      }
-      res.redirect('/finance');
+    if (err) {
+      return res.status(500).send('Error adding record');
+    }
+    res.redirect('/finance');
   });
 });
 
@@ -199,10 +202,10 @@ app.delete('/finance/:id', (req, res) => {
 
   const deleteRecordQuery = `DELETE FROM finance_reports WHERE id = ?`;
   db.query(deleteRecordQuery, [id], (err) => {
-      if (err) {
-          return res.status(500).json({ success: false });
-      }
-      res.json({ success: true });
+    if (err) {
+      return res.status(500).json({ success: false });
+    }
+    res.json({ success: true });
   });
 });
 
@@ -236,12 +239,12 @@ app.post('/edit/:clientId', async (req, res) => {
 
 // Home Route/Show Route
 app.get('/clients', (req, res) => {
-  let {clientId} = req.params;
+  let { clientId } = req.params;
   const tableName = `${clientId}_shop`;
   const searchQuery = req.query.search || '';
   const likeSearchQuery = `%${searchQuery}%`;
 
-  const getTablesSql = 
+  const getTablesSql =
     `SELECT table_name 
     FROM information_schema.tables 
     WHERE table_schema = 'shop' 
@@ -300,7 +303,7 @@ app.get('/daily-deductions', (req, res) => {
         remaining_total DECIMAL(10, 2) NOT NULL,
         PRIMARY KEY (report_date, client_id)
     )`;
-  
+
   db.query(createTableQuery, (err) => {
     if (err) {
       console.error('Error creating table:', err);
@@ -321,7 +324,7 @@ app.get('/daily-deductions', (req, res) => {
           total_deductions = VALUES(total_deductions), 
           transaction_count = VALUES(transaction_count),
           remaining_total = VALUES(remaining_total)`;
-    
+
     db.query(insertDailyReportQuery, (err) => {
       if (err) {
         console.error('Error saving daily report:', err);
@@ -440,7 +443,7 @@ app.get('/grand-totals', (req, res) => {
 app.get('/:clientId', (req, res) => {
   const { clientId } = req.params;
   const bottleOptions = [
-    {  value: 0, text: '' },
+    { value: 0, text: '' },
     { value: 60, text: 'Regular Bottle' },
     { value: 70, text: 'Sting' },
     { value: 170, text: 'Litre' },
@@ -450,7 +453,7 @@ app.get('/:clientId', (req, res) => {
     { value: 130, text: 'Fresher Juice' }
   ];
   const teaOptions = [
-    {  value: 0, text: '' },
+    { value: 0, text: '' },
     { value: 60, text: 'Regular Tea' },
     { value: 40, text: 'Token Tea' }
   ];
@@ -619,7 +622,7 @@ app.post('/deduct/:clientId', (req, res) => {
     const insertLedgerQuery = `
     INSERT INTO deduction_ledger (client_id, deduction_amount, grand_total_before_deduction, grand_total_copy) 
     VALUES (?, ?, ?, ?);`;
- 
+
     db.beginTransaction((err) => {
       if (err) throw err;
       db.query(updateDeductionQuery, [deductionValue, newGrandTotal], (err) => {
@@ -636,7 +639,7 @@ app.post('/deduct/:clientId', (req, res) => {
               res.status(500).send('Failed to record deduction');
             });
           }
-        
+
           db.commit((err) => {
             if (err) {
               return db.rollback(() => {
