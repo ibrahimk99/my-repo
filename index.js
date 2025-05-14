@@ -9,7 +9,6 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const port = 3000;
 
-const arr = ["hello", 1, 2, 3]
 // Set up MySQL connection
 const db = mysql.createConnection({
   host: process.env.MYSQL_HOST,
